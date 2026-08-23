@@ -1,0 +1,45 @@
+dataset: mind
+language: en
+
+paths:
+  train: data/mind/MINDsmall_train
+  dev:   data/mind/MINDsmall_dev
+  # large splits used for leaderboard training/prediction
+  large_train: data/mind/MINDlarge_train
+  large_dev:   data/mind/MINDlarge_dev
+  large_test:  data/mind/MINDlarge_test
+  processed:   data/mind/processed
+
+download:
+  train_url: https://huggingface.co/datasets/yjw1029/MIND/resolve/main/MINDsmall_train.zip
+  dev_url:   https://huggingface.co/datasets/yjw1029/MIND/resolve/main/MINDsmall_dev.zip
+
+# English-specialised embedding model (beat multilingual E5 on MIND: 0.67 vs 0.60)
+embedding_model: sentence-transformers/all-MiniLM-L6-v2
+embedding_pooling: mean        # mean-pool won for MiniLM on MIND
+embedding_prefix: none         # MiniLM needs no query/passage prefix (unlike E5)
+
+temporal_split:
+  # MIND ships pre-split by time; dev (Nov 15) is strictly after train (Nov 9-14)
+  mode: predefined
+
+features:
+  history_max: 30
+  recency_tau_hours: 6.0
+  popularity_windows_hours: [1, 24, 168]
+  rolling_popularity: true     # point-in-time; set false to reproduce the frozen-leak ablation
+
+reranker:
+  model: lightgbm
+  objective: lambdarank
+  n_estimators: 500
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 50
+  train_sample: 400000         # GBDT saturates; 400k ~= full 2.2M
+
+retrieval:
+  recall_k: [50, 100, 200]
+
+leaderboard:
+  competition: https://www.codabench.org/competitions/13967/

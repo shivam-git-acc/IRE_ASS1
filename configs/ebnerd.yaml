@@ -1,0 +1,44 @@
+dataset: ebnerd
+language: da
+
+paths:
+  demo:        data/ebnerd/ebnerd_demo
+  small:       data/ebnerd/ebnerd_small
+  large:       data/ebnerd/ebnerd_large
+  # NOTE: the testset ships double-nested (ebnerd_testset/ebnerd_testset) — a known gotcha
+  testset:     data/ebnerd/ebnerd_testset/ebnerd_testset
+  processed:   data/ebnerd/processed
+
+download:
+  demo_url:  https://ebnerd-dataset.s3.eu-west-1.amazonaws.com/ebnerd_demo.zip
+  small_url: https://ebnerd-dataset.s3.eu-west-1.amazonaws.com/ebnerd_small.zip
+
+# multilingual model for Danish
+embedding_model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+embedding_pooling: mean
+embedding_prefix: none
+
+temporal_split:
+  mode: predefined             # dataset ships time-ordered train/validation/test
+
+features:
+  history_max: 30
+  recency_tau_hours: 24.0
+  # EB-NeRD provides article-level totals used at serving time
+  use_provided_totals: true    # total_pageviews / total_inviews / total_read_time / sentiment
+  rolling_popularity: true
+
+reranker:
+  model: lightgbm
+  objective: lambdarank
+  n_estimators: 500
+  learning_rate: 0.03
+  num_leaves: 31
+  min_child_samples: 50
+  train_sample: 800000
+
+retrieval:
+  recall_k: [50, 100, 200]
+
+leaderboard:
+  competition: https://www.codabench.org/competitions/2469/
