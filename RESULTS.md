@@ -132,6 +132,74 @@ news. MiniLM prefers mean-pool; E5 preferred best-match (opposite optima).
 
 ---
 
+## Ablation 3b — Lexical vs Semantic retrieval, sliced (answers "on which slices?")
+
+Retrieval recall@K on the full pool, sliced to test *where* semantic beats lexical.
+User slices use data-driven history-length percentiles (p20/p80), computed from the eval
+set; article slices use median popularity. MIND uses dev as test (MiniLM as semantic);
+EB-NeRD uses validation as test (E5 as semantic). Each EB-NeRD cell also carries a
+bootstrap 95% CI on the (semantic − lexical) difference.
+
+### MIND — recall@K by user-history slice (dev as test, n=4000)
+
+History-length distribution: min=1, p20=7, median=20, p80=52, max=434.
+cold := ≤ p20 (7 clicks), warm := ≥ p80 (52 clicks).
+
+| slice | n | K | BM25 | MiniLM | ratio | winner |
+|-------|-----|-----|--------|--------|-------|--------|
+| all   | 4000 | 200 | 0.0185 | 0.0250 | 1.35× | MiniLM |
+| cold  | 875  | 200 | 0.0183 | 0.0240 | 1.31× | MiniLM |
+| mid   | 2311 | 200 | 0.0212 | 0.0234 | 1.10× | MiniLM |
+| **warm** | 814 | 200 | 0.0111 | **0.0307** | **2.78×** | MiniLM |
+
+At recall@100 the ratio trend is even sharper: cold 1.27× → mid 1.16× → warm **3.20×**.
+
+**Finding:** semantic (MiniLM) beats lexical (BM25) on MIND across **every** slice, but the
+margin is governed by **history length**, not article popularity. For cold-start users the
+two are near-parity (1.31×); for warm users (long history) MiniLM's recall@200 is 2.78×
+BM25's. Mechanism: as history grows, BM25 *degrades* (0.0111, its worst — the concatenated-
+title query becomes a diluted bag of hundreds of tokens) while MiniLM *improves* (0.0307, its
+best — the mean-pooled embedding becomes a sharper user vector). Slicing by article
+popularity (head vs tail) showed **no** comparable widening — so history length, not
+article niche-ness, is the axis on which semantic's advantage concentrates.
+
+### MIND — recall@200 by article-popularity slice (head vs tail)
+
+| slice | n | BM25 | MiniLM | winner |
+|-------|-----|--------|--------|--------|
+| head (pop > 856) | 1995 | 0.0105 | 0.0165 | MiniLM |
+| tail (pop ≤ 856) | 2005 | 0.0264 | 0.0334 | MiniLM |
+
+MiniLM wins both; the gap does **not** widen for tail — confirms popularity is not the axis.
+
+### EB-NeRD — recall@K by slice (validation as test, n=4000)
+
+History-length distribution: min=5, p20=70, median=221, p80=478, max=1000.
+(Note: EB-NeRD histories are long fixed arrays, so "cold" means "less long", not truly new
+users — a history-length effect is not expected.) Article-popularity median = 82,472 pageviews.
+Every cell reports a bootstrap 95% CI on (E5 − BM25).
+
+| slice | n | K | BM25 | E5 | diff (E5−BM25) | 95% CI | verdict |
+|-------|-----|-----|--------|--------|--------|--------|---------|
+| all | 4000 | 200 | 0.0315 | 0.0272 | −0.0043 | [−0.0113, +0.0033] | **tie** |
+| cold (≤70) | 801 | 200 | 0.0300 | 0.0262 | −0.0037 | [−0.0200, +0.0112] | **tie** |
+| warm (≥478) | 800 | 200 | 0.0262 | 0.0262 | +0.0000 | [−0.0162, +0.0163] | **tie** |
+| head (pv>82k) | 1966 | 200 | 0.0300 | 0.0219 | −0.0081 | [−0.0183, +0.0015] | **tie** |
+| tail (pv≤82k) | 2034 | 200 | 0.0329 | 0.0324 | −0.0005 | [−0.0099, +0.0093] | **tie** |
+
+**Finding:** on EB-NeRD, BM25 and E5 are statistically **indistinguishable** — the 95% CI on
+the difference spans zero in **every** slice at every K, and the nominal "winner" flips with K.
+The MIND history-length mechanism does **not** replicate. Interpretation: on EB-NeRD content
+barely predicts clicks (popularity/recency dominate), so the *type* of content model barely
+matters — lexical vs semantic is a coin-flip.
+
+**Cross-dataset conclusion:** where content carries signal (English MIND), *how* it is modelled
+matters (semantic > lexical, widening with history); where clicks are popularity/recency-driven
+(Danish EB-NeRD), the choice of content model is a coin-flip. This is the retrieval-side mirror
+of the cross-dataset reranking contrast below.
+
+---
+
 ## Ablation 4 — NRMS vs LightGBM vs Hybrid (MIND dev)
 
 | model                                   | dev AUC |
@@ -174,7 +242,7 @@ deficiency.
 | content reranking    | ≈ random (0.52)       | useful (E5 0.588, MiniLM helps) |
 | content retrieval    | weak (~0.037)         | weak (~0.029)            |
 | retrieval hero       | recency (0.96)        | (no reliable published_time) |
-| semantic vs lexical  | tie                   | E5/MiniLM > BM25         |
+| semantic vs lexical  | tie (all CIs span 0)  | MiniLM > BM25 (2.78× for warm users) |
 | head/tail            | tail ≥ head (drift)   | head > tail (normal)     |
 | coverage (LightGBM)  | 0.155                 | 0.037                    |
 
